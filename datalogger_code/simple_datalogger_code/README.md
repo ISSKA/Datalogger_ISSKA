@@ -1,4 +1,4 @@
-# ISSKA Datalogger codes
+# ISSKA Datalogger base code without wireless transmission
 Base code for datalogger without wireless transmission. This code was rewritten in august 2023.
 
 The conf.txt file on the SD card must have the following structure:
