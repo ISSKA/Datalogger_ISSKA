@@ -9,7 +9,7 @@ Only the Sensors.cpp file depends on the sensors added. The Arduino file is exac
 Several different Sensors.cpp code are in the sensors_code folder, for different sensors configurations. All of these codes include the BMP581 and the SHT35 which are already on each PCB. The header file Sensors.h is the same for all codes.
 
 ## To upload these codes
-* Put the Arduino file (wireless or not), Sensors.cpp file and Sensors.h file in a same folder.
+* Put the Arduino file (wireless or not), Sensors.cpp (which you can find in the sensors_code folder) file and Sensors.h file in a same folder.
 * The folder  must have the name of the arduino file, minus the ".ino"
 * Install the needed library on the arduino IDE.
 * Connect the TinyPico with your computer and select the right port on Arduino IDE
