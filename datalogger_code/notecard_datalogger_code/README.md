@@ -10,10 +10,8 @@ The conf.txt file must have the following structure:
 
 To modify the time step or the number of measurements to send at once, add these command on the data.qi file of the device on notehub:
 
-'''
-{"time_step":300} ->this sets the time set to 300 seconds
-{"nb_meas":6} ->this sets the number of measurements sent at once to 6
-'''
+* {"time_step":300} ->this sets the time set to 300 seconds
+* {"nb_meas":6} ->this sets the number of measurements sent at once to 6
 
 
 If you have any questions contact me per email at nicolas.schmid.6035@gmail.com
