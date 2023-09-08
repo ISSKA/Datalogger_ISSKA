@@ -8,4 +8,6 @@ The conf.txt file on the SD card must have the following structure:
   2023/03/31 16:05:00; //time to set the RTC if setRTC = 1
 ```
 
+To set the time on a RTC, change the boolean value in the conf.txt file to 1, and write the time at which you will reboot the datalogger in the third row of the conf.txt file. Restart the datalogger at the exact time that you wrote in teh conf.txt file. After the first reboot, change the boolean value in the conf.txt file to 0 to avoid that the time is changed each time you reboot the datalogger.
+
 If you have any questions contact me per email at nicolas.schmid.6035@gmail.com
