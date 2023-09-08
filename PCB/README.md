@@ -6,4 +6,4 @@ All PCB designs are made with EasyEDA.
     * Gerber file
     * Bill of material (BOM)
     * Pick and place (CPL)
-* The PCB_design folder contains the EasyEDA file of these PCB for you to modify them as you want.
+* The PCB_design folder contains the PCB designs on EasyEDA (Schematics and Boards design). 
