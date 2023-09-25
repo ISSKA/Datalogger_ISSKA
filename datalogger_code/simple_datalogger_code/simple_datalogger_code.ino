@@ -104,11 +104,11 @@ void setup(){
 
     mesure_all_sensors();
 
-    if(tp.GetBatteryVoltage()>3.5){
+    if(tp.GetBatteryVoltage()>3.3){
       deep_sleep_mode(time_step);
     }
     else{
-      deep_sleep_mode(60*60*24*365*10); //sleep during ten years (don't wake up) to avoid damaging the battery
+      deep_sleep_mode(3600); //sleep during ten years (don't wake up) to avoid damaging the battery
     }
   }
 }
