@@ -5,7 +5,7 @@ This repository contains the different codes used on our dataloggers. There are 
 * the simple_datalogger_code is the code with no wireless transmission
 * the notecard_datalogger_code is the code with wireless transmission.
 
-There are several different C++ files in the sensors_code folder which are all names Sensors.cpp. For each new sensor configuration, this C++ file must be modified. Refer to the Datalogger Guide pdf for more informations about the Sensors.cpp modifications for a new sensor.
+There are several different C++ files in the sensors_code folder which are all named Sensors.cpp. For each new sensor configuration, this C++ file must be modified. Refer to the Datalogger Guide pdf for more informations about the Sensors.cpp modifications for a new sensor.
 
 The header file Sensors.h is the same for all codes.
 
