@@ -39,7 +39,7 @@ SCD4x co2_sensor_1(SCD4x_SENSOR_SCD41); //initialise SCD41 CO2 sensor
 SCD4x co2_sensor_2(SCD4x_SENSOR_SCD41); //initialise SCD41 CO2 sensor
 
 //declare arrays where the names and values of the sensors are stored
-String names[]={"Vbatt","tempSHT","humSHT","tempBMP","pressBMP","CO2_1","tempSCD_1","humSCD_1","CO2_2","tempSCD_2","humSCD_2"}; //update this list if you add sensors!!!
+String names[]={"Vbatt","tempSHT","humSHT","pressBMP","CO2_1","humSCD_1","CO2_2","humSCD_2"}; //update this list if you add sensors!!!
 const int nb_values = sizeof(names)/sizeof(names[0]);
 float values[nb_values];
 
@@ -89,69 +89,53 @@ void Sensors::measure() {
   values[0]=tiny.GetBatteryVoltage(); //Vbatt
 
   //connect and start the SHT35 PCB sensor 
+
+  tcaselect(6);
+  delay(10);
+  co2_sensor_2.begin();
+  delay(500);
+  co2_sensor_2.measureSingleShot();
+  delay(6000); //delay needed specified in the datasheet for single shot measurements
+  co2_sensor_2.readMeasurement();
+  delay(100);
+  //values[9]=co2_sensor_2.getTemperature();
+  values[7]=co2_sensor_2.getHumidity();
+  float x=co2_sensor_2.getCO2();
+  values[6]=-0.00001*sq(x)+1.3531*x+420.94; //mean over 3 co2 measurements
+  delay(100);
   tcaselect(1);
-  delay(3); //wait 3ms for the multiplexer to switch
+  delay(100); //wait 3ms for the multiplexer to switch
   sht.begin(SHT35_sensor_ADRESS); 
   sht.read();
   values[1]=sht.getTemperature(); //tempSHT
   values[2]=sht.getHumidity(); //humSHT
-
-  //connect and start the BMP581 PCB sensor 
-  tcaselect(2);
-  delay(3);
-  bmp.beginI2C(BMP581_sensor_ADRESS);
-  delay(5);
-  bmp5_sensor_data data = {0,0};
-  int8_t err = bmp.getSensorData(&data);
-  values[3]=data.temperature; //tempBMP
-  values[4]=data.pressure/100; //pressBMP (in millibar)
-
-  //change I2C frequency for long cables
-  Wire.end();
-  Wire.begin();
-  Wire.setClock(5000);
-  delay(500);
 
   //connect and start the SCD41 CO2 sensor 
   tcaselect(7);
   delay(10);
   co2_sensor_1.begin();
   delay(50);
-  float sum_co2_1 = 0;
-  for(int i = 0; i<3;i++){
-    co2_sensor_1.measureSingleShot();
-    delay(4000); //delay needed specified in the datasheet for single shot measurements
-    co2_sensor_1.readMeasurement();
-    delay(1000);
-    sum_co2_1=sum_co2_1+co2_sensor_1.getCO2();
-    values[6]=co2_sensor_1.getTemperature();
-    values[7]=co2_sensor_1.getHumidity();
-    delay(20);
-  }
-  values[5] = sum_co2_1/3; //mean over 3 co2 measurements
+  co2_sensor_1.measureSingleShot();
+  delay(6000); //delay needed specified in the datasheet for single shot measurements
+  co2_sensor_1.readMeasurement();
+  delay(100);
+  //values[6]=co2_sensor_1.getTemperature();
+  values[5]=co2_sensor_1.getHumidity();
+  values[4] = co2_sensor_1.getCO2(); //mean over 3 co2 measurements
   delay(100);
 
-  tcaselect(6);
-  delay(10);
-  co2_sensor_2.begin();
-  delay(50);
-  float sum_co2_2 = 0;
-  for(int i = 0; i<3;i++){
-    co2_sensor_2.measureSingleShot();
-    delay(4000); //delay needed specified in the datasheet for single shot measurements
-    co2_sensor_2.readMeasurement();
-    delay(1000);
-    sum_co2_2=sum_co2_2+co2_sensor_2.getCO2();
-    values[9]=co2_sensor_2.getTemperature();
-    values[10]=co2_sensor_2.getHumidity();
-    delay(20);
-  }
-  values[8]=sum_co2_2/3; //mean over 3 co2 measurements
+
+  //connect and start the BMP581 PCB sensor 
+  tcaselect(2);
   delay(100);
-  Wire.end();
-  Wire.begin();
-  Wire.setClock(50000);
-  delay(500);
+  bmp.beginI2C(BMP581_sensor_ADRESS);
+  delay(100);
+  bmp5_sensor_data data = {0,0};
+  int8_t err = bmp.getSensorData(&data);
+  //values[3]=data.temperature; //tempBMP
+  values[3]=data.pressure/100; //pressBMP (in millibar)
+  delay(100);
+
 }
 
 // multiplex bus selection for the first multiplexer 
