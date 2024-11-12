@@ -603,7 +603,7 @@ void send_data_overGSM(){
   myFile.close();
 
   //print the values which will be sent
-  Serial.println("We now try to send several measurements over LoRa all at once");
+  Serial.println("We now try to send several measurements over GSM all at once");
   for (int i =0; i<nb_meas_sent_at_once;i++) {
     Serial.print("line to be sent-> ");
     Serial.print("time: ");
