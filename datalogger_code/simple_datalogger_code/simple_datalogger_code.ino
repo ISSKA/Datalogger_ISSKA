@@ -27,7 +27,7 @@ int SD_date_time[6]; //[year,month,day,hour,minute,second]
 float start_time_programm; //time when the programm starts. Used to adjust more precisely the rtc clock
 
 //PINS to power different devices
-#define Enable5VPIN 27 //turns the 3V to 5V converter on if switched to high
+#define Enable5VPIN 25 //turns the 3V to 5V converter on if switched to high
 #define MOSFET_SENSORS_PIN 14 //pin to control the power of the sensors, the screen and sd card reader
 
 //SD card
