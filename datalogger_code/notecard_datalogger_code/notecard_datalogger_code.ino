@@ -29,7 +29,7 @@ Sensors sensor = Sensors();
 Notecard notecard;
 
 //PINS to power different devices
-#define Enable5VPIN 27 //turns the 3V to 5V converter on if switched to high
+#define Enable5VPIN 25 //turns the 3V to 5V converter on if switched to high
 #define MOSFET_SENSORS_PIN 14 //pin which controls the power of the sensors, the screen and sd card reader
 #define MOSFET_NOTECARD_PIN 4 //pin which controls the power of the notecard
 #define NOTECARD_I2C_MULTIPLEXER_CHANNEL 3 //channel of the multiplexer to which the notecard is connected
