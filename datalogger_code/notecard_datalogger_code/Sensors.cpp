@@ -84,7 +84,7 @@ void Sensors::measure() {
   //connect and start the SHT35 PCB sensor 
   tcaselect(1);
   delay(3); //wait 2ms for the multiplexer to switch
-  sht.begin(SHT35_sensor_ADRESS); 
+  sht.begin(); 
   sht.read();
   values[1]=sht.getTemperature(); //tempSHT
   values[2]=sht.getHumidity(); //humSHT
