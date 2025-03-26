@@ -1,0 +1,13 @@
+(
+    $corrLevel := function($root) {(
+    $root ~> |$|{'value': $string($round($number(value)+ 5, 2))}|
+    )};
+
+    $Level_to_Flow := function($root) {(
+    $root ~> |$|{'value': $string($round(0.00000003*$power($number(value), 5)+0.0000008*$power($number(value), 4)+0.0003*$power($number(value), 3)-0.012*$power($number(value), 2)+0.2019*($number(value)), 2))}|
+    )};
+
+    {
+        "data": $merge([body.data, {"Corr_Water_Level_(cm)": $corrLevel(body.data.`Water_Level_(cm)`),"Flow_(L/min)": $Level_to_Flow(body.data.`Water_Level_(cm)`) }])
+    }
+)
