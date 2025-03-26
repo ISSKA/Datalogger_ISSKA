@@ -1,0 +1,38 @@
+/* *******************************************************************************
+Code for datalogger TPA_230317 with Notecard, 2 MS8067 (temp, hum, press), 1 SCD41 CO2 sensor and an O2 sensor
+
+
+This code was entirely rewritten by Nicolas Schmid. Here are some important remarks when modifying to add or  add or remove a sensor:
+    - adjust the array sensor_names which is in this .ino file
+    - in Sensors::getFileData () don't forget to add a "%s;" for each new sensor (if you forget the ";" it will read something completely wrong)
+    - adjust the struct, getFileHeader (), getFileData (), serialPrint() and mesure() with the sensor used
+    - in Sensors.h don't forget to adjust the number of sensors in the variable num_sensors. This is actually rather a count of the number of sotred measurement
+      values.For example if you have an oxygen sensor and you measure the voltage but also directy compute the O2 percentage, this counts as 2 measurements
+
+The conf.txt file must have the following structure:
+  300; //deepsleep time in seconds (put at least 120 seconds)
+  1; //boolean value to choose if you want to set the RTC clock with GSM time (recommended to put 1)
+  12; // number of measurements to be sent at once
+
+If you have any questions contact me per email at nicolas.schmid.6035@gmail.com
+**********************************************************************************
+*/ 
+
+
+#ifndef sensors_h
+#define sensors_h
+#include "Arduino.h"
+#define num_sensors 11 ///change here is you add sensors !!!!!!!! (voltageO2 and percentageO2 count as 2 sensors)
+
+
+class Sensors {
+  public: 
+    Sensors(); 
+    String getFileHeader();
+    String getFileData();
+    String serialPrint();
+    void mesure();
+    void tcaselect(uint8_t i);
+};
+
+#endif
