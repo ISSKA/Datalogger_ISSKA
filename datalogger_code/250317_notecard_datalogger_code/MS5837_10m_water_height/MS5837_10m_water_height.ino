@@ -40,9 +40,6 @@ Notecard notecard;
 #define SD_CS_PIN 5//Define the pin of the tinypico connected to the CS pin of the SD card reader
 #define DATA_FILENAME "/data.csv"
 #define CONFIG_FILENAME "/conf.txt"
-#define usbSerial Serial
-
- 
 
 //Variables which must be stored on the RTC memory, to not be erease in deep sleep (only about 4kB of storage available)
 RTC_DATA_ATTR int bootCount_since_change = 0; //boot count since external change from notehub
@@ -53,15 +50,11 @@ RTC_DATA_ATTR int start_date_time[6]; //[year,month,day,hour,minute,second] of t
 RTC_DATA_ATTR int time_step;
 RTC_DATA_ATTR int nb_meas_sent_at_once; //number of measurements sent at once with the notecard
 RTC_DATA_ATTR bool SetRTC; //read this value from the conf.txt file on the SD card. True means set the clock time with GSM signal
-RTC_DATA_ATTR int failed_sync_count = 0;
+
 
 //********************** MAIN LOOP OF THE PROGRAMM *******************************
 //The setup is recalled each time the micrcontroller wakes up from a deepsleep
 void setup(){ 
-
-
-  //notecard.setDebugOutputStream(usbSerial);
-
 
   //Start serial communication protocol with external devices (e.g. your computer)
   Serial.begin(115200);
@@ -126,13 +119,13 @@ void setup(){
     if (bootCount_since_change%nb_meas_sent_at_once == 0){ //after a number nb_meas_sent_at_once of measurements, send the last few stored measurements over GSM
       send_data_overGSM();
     }
-    delay(100);
-    // if(tp.GetBatteryVoltage()>3.0){
-    deep_sleep_mode(time_step);
-    // }
-    // else{
-    //   deep_sleep_mode(3600); //sleep during ten years (don't wake up) to avoid damaging the battery
-    // }
+
+    if(tp.GetBatteryVoltage()>3.5){
+      deep_sleep_mode(time_step);
+    }
+    else{
+      deep_sleep_mode(3600); //sleep during ten years (don't wake up) to avoid damaging the battery
+    }
   }
 }
 
@@ -146,8 +139,7 @@ void power_external_device(){
 
   //Pin to control the gate of MOSFET for notecard (turned off)
   pinMode(MOSFET_NOTECARD_PIN, OUTPUT);
-  digitalWrite(MOSFET_NOTECARD_PIN, HIGH);
-  Serial.println("Sensor powered");
+  digitalWrite(MOSFET_NOTECARD_PIN, LOW);
 }
 
 void put_usefull_values_on_display(){
@@ -316,7 +308,6 @@ void deep_sleep_mode(int sleeping_time){
   //specify wakeup trigger and enter deep sleep
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_15, 0); //2nd param. is logical level of trigger signal (tinypico is wake-up when signal is low in this case)
   esp_deep_sleep_start();
-  Serial.println("Now we sleep");
 }
 
 String readRTC() { //print current time
@@ -364,7 +355,6 @@ void mesure_all_sensors(){
   sensor.measure(); // measures all sensors and stores the values in an array
   sensor.serialPrint(); //print all the sensors' values in Serial monitor
   save_data_in_SD(); //save measuremetns on the SD card
-  Serial.println("Sensor measured");
 }
 
 void initialize_notecard(){
@@ -380,41 +370,37 @@ void initialize_notecard(){
   //set the notecard mode and tell where to send data
   J *req_set = notecard.newRequest("hub.set");    
   JAddStringToObject(req_set, "product", myProductID);
-  JAddStringToObject(req_set, "mode", "periodic");
-  notecard.sendRequestWithRetry(req_set,10);
+  JAddStringToObject(req_set, "mode", "minimum");
+  notecard.sendRequest(req_set);
 }
 
-bool synchronize_notecard() {
-    // Envoyer la commande pour synchroniser le Notecard
-    notecard.sendRequest(notecard.newRequest("hub.sync"));
-    //wait for synchronization
-    bool GSM_time_out = false;
-    unsigned long start_time_connection = micros();
-    int completed = 0;
-    do { //this loop wait until the connection is completed or until we reach 4 minutes (timeout)
-        J *SyncStatus = notecard.requestAndResponse(notecard.newRequest("hub.sync.status"));
-        const char* status = JGetString(SyncStatus, "status");
-        if (status != NULL && strstr(status, "completed") != NULL) {
-            completed = 1;
-        }
-        notecard.deleteResponse(SyncStatus); //delete the response
-        if ((micros() - start_time_connection) / 1000000 > 240) { //after 240s stop waiting for the connection
-            GSM_time_out = true;
-            Serial.println("The notecard failed to synchronize1!");
-            return false;
-        }
-        delay(500); //check connection status every 500ms
-    } while (completed == 0 && !GSM_time_out);
-
-    if (completed != 0) {
-        Serial.println("The notecard is synchronized!");
-        return true;
-    } else {
-        Serial.println("The notecard failed to synchronize2!");
-        return false;
+bool synchronize_notecard(){ //returns true if it was able to connect the notecard to GSM nework
+  //send command to sync the notecard
+  notecard.sendRequest(notecard.newRequest("hub.sync"));
+  //wait for syncronisation
+  bool GSM_time_out = false;
+  unsigned long start_time_connection = micros();
+  int completed=0;
+  do{ //this loop wait until then connection is completed or until we reach 4 minutes (timeout)
+    J *SyncStatus = notecard.requestAndResponse(notecard.newRequest("hub.sync.status"));
+    completed = (int)JGetNumber(SyncStatus,"completed");
+    notecard.deleteResponse(SyncStatus); //delete the response
+    if((micros()-start_time_connection)/1000000>240){ //after 240s stop waiting for the connexion
+      GSM_time_out = true;
+      return false;
     }
-}
+    delay(500); //check connection status every 500ms
+  } while (completed==0 && !GSM_time_out); 
 
+  if (completed!=0){
+    Serial.println("The notecard is syncronized!");
+    return true;
+  }
+  else{
+    Serial.println("The notecard failed to synchronize!");
+    return false;
+  }
+}
 
 void get_external_parameter(){   //get parameters from notehub like timestep or nb_meas
   //get the number of changes made on notehub
@@ -456,10 +442,8 @@ void get_external_parameter(){   //get parameters from notehub like timestep or 
       Serial.println(new_time_step);
       Serial.print("new number of measurements to send at once: ");
       Serial.println(new_nb_meas_sent_at_once);
-      //synchronize_notecard(); //sync the fact that we read and deleted parameters to remove them from the notehub queue
-        Serial.println("Ask DATA to Notehub");
-        notecard.sendRequest(notecard.newRequest("hub.sync"));
-        return;
+      synchronize_notecard(); //sync the fact that we read and deleted parameters to remove them from the notehub queue
+
       //write changes to sd card conf.txt file
       Serial.println("change conf file");
       String new_conf_file_str = String(new_time_step)+"; //time step in seconds \n";
@@ -508,28 +492,25 @@ unsigned int getGSMtime(){
   tp.DotStar_SetPixelColor(25, 0, 25 ); //LED Purple
 
   if(synchronize_notecard()){
-    //get_external_parameter(); //get changes from notehub
+    get_external_parameter(); //get changes from notehub
     J *rsp = notecard.requestAndResponse(notecard.newRequest("card.time"));
-
     unsigned int recieved_time = (unsigned int)JGetNumber(rsp, "time");
     notecard.deleteResponse(rsp);
-    delay(5000);
 
     //show the numbers of bars of GSM network (0 to 4) like on a phone
-    // J *gsm_info = notecard.requestAndResponse(notecard.newRequest("card.wireless"));
-    // J *net_infos = JGetObjectItem(gsm_info,"net");
-    // int bars = JGetNumber(net_infos, "bars");
-    // notecard.deleteResponse(gsm_info);
-    // Serial.print("Bars: ");
-    // Serial.println(bars);
-    // u8x8.setCursor(0, 6);
-    // u8x8.print("GSM Bars: ");
-    // u8x8.print(bars);
+    J *gsm_info = notecard.requestAndResponse(notecard.newRequest("card.wireless"));
+    J *net_infos = JGetObjectItem(gsm_info,"net");
+    int bars = JGetNumber(net_infos, "bars");
+    notecard.deleteResponse(gsm_info);
+    Serial.print("Bars: ");
+    Serial.println(bars);
+    u8x8.setCursor(0, 6);
+    u8x8.print("GSM Bars: ");
+    u8x8.print(bars);
     tp.DotStar_SetPixelColor(0, 50, 0 ); //LED Green
     Serial.println("The RTC time is adjusted with the GSM time (GMT + 1)");
-    //digitalWrite(MOSFET_NOTECARD_PIN, LOW); //turn off the notecard
+    digitalWrite(MOSFET_NOTECARD_PIN, LOW); //turn off the notecard
     sensor.tcaselect(0); //connect the multiplexer to another I2c line to avoid having the notecard interfer with other devices
-     //recieved_time+3600;
     return recieved_time+3600; //+3600 for GMT+1 (winter time in switzerland)
   }
   else{
@@ -537,124 +518,129 @@ unsigned int getGSMtime(){
     u8x8.setCursor(0, 6);
     u8x8.print("Failed to connect");
     tp.DotStar_SetPixelColor(50, 0, 0 ); //LED Red
-    //digitalWrite(MOSFET_NOTECARD_PIN, LOW); //turn off the notecard
+    digitalWrite(MOSFET_NOTECARD_PIN, LOW); //turn off the notecard
     sensor.tcaselect(0); //connect the multiplexer to another I2c line to avoid having the notecard interfer with other devices
     return (unsigned int)rtc.now().unixtime(); //if notecard couldn't connect just return the current time of the rtc.
   }
 }
 
-void send_data_overGSM() {
-    int total_meas_to_send = nb_meas_sent_at_once + (failed_sync_count * nb_meas_sent_at_once);
-    Serial.printf("📤 Envoi de %d mesures...\n", total_meas_to_send);
+void send_data_overGSM(){
 
-    File myFile = SD.open(DATA_FILENAME, FILE_READ);
-    if (!myFile) {
-        Serial.println("❌ Erreur : Impossible d'ouvrir le fichier SD.");
-        return;
+  //read the lines to be sent in the SD memory
+  File myFile = SD.open(DATA_FILENAME, FILE_READ);
+  int position_in_csv = myFile.size(); //get the position of the last character in the csv file
+
+  //find the position where the last few lines of the CSV begin but starting from the end of the CSV since the file might be very long
+  for (int i = 0; i < nb_meas_sent_at_once;i++){
+    position_in_csv = position_in_csv -20; // avoid the last twenty characters since a line is certainly longer than 20 characters
+    myFile.seek(position_in_csv); 
+    while (myFile.peek() != '\n'){
+      position_in_csv = position_in_csv - 1;
+      myFile.seek(position_in_csv); // Go backwards until we detect the previous line separator
     }
+  }
+  myFile.seek(position_in_csv+1); //at this point we are at the beginning of the nb_meas_sent_at_once last lines of the csv file
 
-    int position_in_csv = myFile.size();
-    for (int i = 0; i < total_meas_to_send; i++) {
-        position_in_csv = max(position_in_csv - 20, 0);
-        myFile.seek(position_in_csv);
-        while (position_in_csv > 0 && myFile.peek() != '\n') {
-            position_in_csv--;
-            myFile.seek(position_in_csv);
-        }
+  //creat a matrix with the values to be sent. The matrix will look like this:
+    /*
+  data_matrix
+          Vbat sensor1 sensor2 ...
+  meas1     x       x       x     
+  meas2     x       x       x     
+  meas3     x       x       x     
+  ...
+  
+  The time array contains the measurement times in unixtime (UTC+0)
+
+  time array
+          time
+  meas1     x         
+  meas2     x         
+  meas3     x      
+  ...
+  
+  */
+  String data_matrix[nb_meas_sent_at_once][sensor.get_nb_values()]; //the "2 + ..." is there because we also put Bootcount and DateTime in our matrix
+  int time_array[nb_meas_sent_at_once];
+  int counter=0;
+  while (myFile.available()) {
+    for (int i =0; i<2+sensor.get_nb_values();i++){ //the +2 is for datetime and bootcount which are not sensors data but still stored on sd card
+      String element = myFile.readStringUntil(';');
+      if (element.length()>0 &&i==1){ //convert string time to unixtime ->first parse the time string to transform it in datetime format
+        String day_stored = element.substring(0,2);
+        String month_stored = element.substring(3,5);
+        String year_stored = element.substring(6,10);
+        String hour_stored = element.substring(11,13);
+        String minute_stored = element.substring(14,16);
+        String second_stored = element.substring(17,19);
+        DateTime datetime_stored = DateTime(year_stored.toInt(),month_stored.toInt(),day_stored.toInt(),hour_stored.toInt(),minute_stored.toInt(),second_stored.toInt());
+        time_array[counter] = datetime_stored.unixtime()-3600; //since time stored on SD is UTC+1 but we need UTC+0 for the notecard
+      }
+      if (element.length()>0 &&i>1) data_matrix[counter][i-2] = element;
     }
-    myFile.seek(position_in_csv + 1);
+    myFile.readStringUntil('\n');
+    counter++;
+  }
+  myFile.close();
 
-    String data_matrix[total_meas_to_send][sensor.get_nb_values()];
-    int time_array[total_meas_to_send], counter = 0;
-
-    while (myFile.available() && counter < total_meas_to_send) {
-        for (int i = 0; i < 2 + sensor.get_nb_values(); i++) {
-            String element = myFile.readStringUntil(';');
-            if (element.length() > 0) {
-                if (i == 1) {
-                    DateTime datetime(
-                        element.substring(6, 10).toInt(), element.substring(3, 5).toInt(), element.substring(0, 2).toInt(),
-                        element.substring(11, 13).toInt(), element.substring(14, 16).toInt(), element.substring(17, 19).toInt());
-                    time_array[counter] = datetime.unixtime() - 3600;
-                } else if (i > 1) {
-                    data_matrix[counter][i - 2] = element;
-                }
-            }
-        }
-        myFile.readStringUntil('\n');
-        counter++;
+  //print the values which will be sent
+  Serial.println("We now try to send several measurements over GSM all at once");
+  for (int i =0; i<nb_meas_sent_at_once;i++) {
+    Serial.print("line to be sent-> ");
+    Serial.print("time: ");
+    Serial.print(time_array[i]); 
+    Serial.print("   data: ");
+    for(int j=0;j<sensor.get_nb_values();j++){    
+      Serial.print(data_matrix[i][j]);
+      Serial.print("  ");
     }
-    myFile.close();
+    Serial.println();
+  }
 
-    Serial.println("Données envoyées :");
-    for (int i = 0; i < total_meas_to_send; i++) {
-        Serial.printf("🕒 %d: ", time_array[i]);
-        for (int j = 0; j < sensor.get_nb_values(); j++) {
-            Serial.printf("%s  ", data_matrix[i][j].c_str());
-        }
-        Serial.println();
+  initialize_notecard();
+
+  //turn LED yellow while sending data
+  tp.DotStar_SetPixelColor(25, 25, 0 ); 
+
+  //create the Jason file to be sent
+  String* sensor_names=sensor.get_names();
+  J *body = JCreateObject();
+  J *data = JCreateObject();
+  JAddItemToObject(body, "data", data);
+  for(int i=0; i<sensor.get_nb_values();i++){
+    J *sensor = JAddArrayToObject(data,sensor_names[i].c_str());
+    for(int j=0; j<nb_meas_sent_at_once;j++){
+      J *sample = JCreateObject();
+      JAddItemToArray(sensor, sample);
+      JAddStringToObject(sample, "value", data_matrix[j][i].c_str());
+      JAddStringToObject(sample, "epoch", String(time_array[j]).c_str()); 
     }
+  }
 
-    initialize_notecard();
-    tp.DotStar_SetPixelColor(25, 25, 0);
+  //print the Jason data
+  char* tempString = JPrint(body);
+  Serial.println("Print the body object ...");
+  Serial.println(tempString);
 
-    J *req_template = notecard.newRequest("note.template");
-    if (req_template != NULL) {
-        J *body = JAddObjectToObject(req_template, "body");
-        if (body != NULL) {
-            String* sensor_names = sensor.get_names();
-            J *data = JCreateObject();
-            JAddItemToObject(body, "data", data);
-            for (int i = 0; i < sensor.get_nb_values(); i++) {
-                J *sensorArray = JAddArrayToObject(data, sensor_names[i].c_str());
-                J *sample = JCreateObject();
-                JAddItemToArray(sensorArray, sample);
-                JAddStringToObject(sample, "value", "TSTRING(12)");
-                JAddStringToObject(sample, "epoch", "TSTRING(20)");
-            }
-            JAddStringToObject(req_template, "file", "dataLORA.qo");
-            JAddNumberToObject(req_template, "port", 6);
-            JAddStringToObject(req_template, "format", "compact");
-            notecard.sendRequest(req_template);
-        }
-    }
+  //create a request to queue the data to be sent
+  J *req_queue_data = notecard.newRequest("note.add");
+  JAddItemToObject(req_queue_data, "body", body);
+  notecard.sendRequest(req_queue_data);
 
-    J *req_queue_data = notecard.newRequest("note.add");
-    if (req_queue_data != NULL) {
-        JAddStringToObject(req_queue_data, "file", "dataLORA.qo");
-        J *body = JAddObjectToObject(req_queue_data, "body");
-        if (body != NULL) {
-            String* sensor_names = sensor.get_names();
-            J *data = JCreateObject();
-            JAddItemToObject(body, "data", data);
-            for (int i = 0; i < sensor.get_nb_values(); i++) {
-                J *sensorArray = JAddArrayToObject(data, sensor_names[i].c_str());
-                for (int j = 0; j < total_meas_to_send; j++) {
-                    J *sample = JCreateObject();
-                    JAddItemToArray(sensorArray, sample);
-                    JAddStringToObject(sample, "value", data_matrix[j][i].c_str());
-                    JAddStringToObject(sample, "epoch", String(time_array[j]).c_str());
-                }
-            }
-            notecard.sendRequest(req_queue_data);
-        }
-    }
+  //syncronizing notecard with notehub to send the data
+  if(synchronize_notecard()){
+    Serial.println("data successfully sent!");
+    tp.DotStar_SetPixelColor(0, 50, 0 ); //LED green
+    get_external_parameter(); //if parameters changed on notehub, adjust the parameters
+  }
+  else{
+    Serial.println("failed to send the data"); 
+    tp.DotStar_SetPixelColor(50, 0, 0 ); //LED red
+  }
 
-    Serial.println("🔄 Synchronisation avec Notehub...");
-    if (synchronize_notecard()) {
-        Serial.println("✅ Synchronisation réussie !");
-        tp.DotStar_SetPixelColor(0, 50, 0);
-        get_external_parameter();
-        failed_sync_count = 0;
-    } else {
-        Serial.println("❌ Échec de la synchronisation. Stockage des données pour le prochain envoi.");
-        tp.DotStar_SetPixelColor(50, 0, 0);
-        failed_sync_count++;
-    }
-
-    digitalWrite(MOSFET_NOTECARD_PIN, LOW);
-    sensor.tcaselect(0);
-    delay(1000);
+  digitalWrite(MOSFET_NOTECARD_PIN, LOW); 
+  sensor.tcaselect(0); //connect the multiplexer to another I2c line to avoid having the notecard interfer with other devices
+  delay(100); 
 }
  
 
