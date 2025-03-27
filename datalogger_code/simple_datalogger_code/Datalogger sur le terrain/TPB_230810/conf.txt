@@ -1,0 +1,3 @@
+300; //time step
+0; //set rtc
+2023/07/21 15:02:00; //time to set the rtc
