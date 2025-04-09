@@ -123,9 +123,12 @@ void Sensors::measure() {
   values[6] = FlowSFM;
   Serial.println(FlowSFM);
   //Calcul de la vitesse en m/s en divisant par la surface du tube de mesure dont le diamètre est de 19.8 mm
-  float FlowSFM_ms=(0.0034*pow(values[6],3)-0.0559*pow(values[6],2)+0.4035*values[6]);
-  delay(50);
-  values[5] = FlowSFM_ms;
+  if (values[6]>=0){
+    values[5]=(0.0034*pow(values[6],3)-0.0559*pow(values[6],2)+0.4035*values[6]);
+  }
+  else{
+    values[5]=-1*(0.0034*pow(abs(values[6]),3)-0.0559*pow(values[6],2)+0.4035*abs(values[6]));
+  }
   Wire.end();
   Wire.begin();
   Wire.setClock(50000);
