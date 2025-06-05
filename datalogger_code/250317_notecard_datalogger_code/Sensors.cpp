@@ -105,43 +105,24 @@ void Sensors::measure() {
   //Mesure de l'anémomètre ATMOS 22 
   delay(100);
   tcaselect(0);
-  delay(1000);
+  delay(2000);
   anem.begin();
-  delay(1000);
+  delay(4000);
 
   float sum_wSpd = 0;
   float sum_wDir = 0;
   float sum_wGst = 0;
   float sum_wTmp = 0;
-  int valid_count = 0;
-  const int nb_mesures = 10;
+  //int valid_count = 0;
 
-  for (int i = 0; i < nb_mesures; i++) {
-    anem.getMeasurements();
-    // Vérifie que la mesure est valide (exclut les -48000)
-    if (anem.wSpd > -100 && anem.wSpd < 100) { // valeurs dans un range plausible
-      sum_wSpd += anem.wSpd;
-      sum_wDir += anem.wDir;
-      sum_wGst += anem.wGst;
-      sum_wTmp += anem.wTmp;
-      valid_count++;
-    }
-    delay(1500); // 1s entre les mesures
-  }
+  anem.getMeasurements();
+  delay(2000);
 
-  // Évite la division par zéro
-  if (valid_count > 0) {
-    values[5] = sum_wSpd / valid_count; // Windspd
-    values[6] = sum_wDir / valid_count; // Winddir
-    values[7] = sum_wGst / valid_count; // WindGust
-    values[8] = sum_wTmp / valid_count; // WindT
-  } else {
-    // Si aucune mesure valide, on indique une valeur d’erreur ou on garde l’ancienne
-    values[5] = -999;
-    values[6] = -999;
-    values[7] = -999;
-    values[8] = -999;
-  }
+  values[5] = anem.wSpd;
+  values[6] = anem.wDir;
+  values[7] = anem.wGst;
+  values[8] = anem.wTmp;
+
 
   delay(100);
   tcaselect(0);
