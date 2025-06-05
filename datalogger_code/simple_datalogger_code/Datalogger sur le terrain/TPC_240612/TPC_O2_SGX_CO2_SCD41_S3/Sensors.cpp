@@ -32,7 +32,8 @@ If you have any questions contact me per email at nicolas.schmid.6035@gmail.com
 #define BMP581_sensor_ADRESS 0x46 //I2C adress of the BMP581 set on the PCB
 #define SHT35_sensor_ADRESS 0x44 //I2C adress of the SHT35 set on the PCB
 
-float O2_voltage=1.168;
+//float O2_voltage=1.168; Old value
+float O2_voltage=1.053;
 
 //create an instance of the sensors' classes
 
@@ -132,7 +133,8 @@ void Sensors::measure() {
   adcValue=ads1115.readADC_SingleEnded(0);
   Serial.print("ADC count value: ");Serial.println(adcValue);
   voltage = adcValue/ADC_MAX*V_REF;
-  float O2_voltage_tcomp=0.002864*values[3]+1.124689;
+  //float O2_voltage_tcomp=0.002864*values[3]+1.124689;
+  float O2_voltage_tcomp=0.002864*values[3]+1.02689;
   Serial.print("Voltage: ");Serial.println(voltage,4);
   //O2 sensor is the SGX-40X
   //0% -> 0V    18.4% -> 1.2V

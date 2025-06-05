@@ -1,3 +1,4 @@
+
 /* *******************************************************************************
 This sensor code is for the two sensors that are installed by default on most PCB.
 We have the SHT35 (I2c adress 0x44 and TCA1) and the BMP581 (I2c adress 0x46 and TCA2)
@@ -14,58 +15,57 @@ If you have any questions contact me per email at nicolas.schmid.6035@gmail.com
 **********************************************************************************
 */  
 
+
 //include libraries for the sensors
 #include <Wire.h>
 #include "Sensors.h"
 #include "SHT31.h"
 #include "SparkFun_BMP581_Arduino_Library.h"
 #include <TinyPICO.h>
-#include "AtlasHumidityUART.h"
+#include "MS5837.h"
 
 //parameters which depend on the PCB version
 #define I2C_MUX_ADDRESS 0x73 //I2C adress of the multiplexer set on the PCB
 #define BMP581_sensor_ADRESS 0x46 //I2C adress of the BMP581 set on the PCB
 #define SHT35_sensor_ADRESS 0x44 //I2C adress of the SHT35 set on the PCB
 
-#define TX_Atlas 33
-#define RX_Atlas 32
-#define AtlasSerial Serial2
-
 //create an instance of the sensors' classes
 TinyPICO tiny = TinyPICO();
 SHT31 sht;
 BMP581 bmp;
-AtlasHumidityUART atlasHum(AtlasSerial);
+MS5837 ms5837_sensor;
 
 //declare arrays where the names and values of the sensors are stored
-String names[]={"Vbatt","tempSHT","humSHT","tempBMP","pressBMP","HUM","TEMP","DEW"}; //update this list if you add sensors!!!
-const int nb_values = sizeof(names)/sizeof(names[0]);
+String names[]={"Vbatt","tempSHT","humSHT","tempBMP","pressBMP","tempMS","pressWat","htWat"}; //update this list if you add sensors!!!
+const int nb_values = sizeof(names) / sizeof(names[0]);
 float values[nb_values];
+int decimals[] = {2, 3, 2, 2, 3, 3, 3, 3}; // Nombre de décimales pour chaque capteur
 
-//return the names array pointer
-String* Sensors::get_names(){ 
+// Retourne le pointeur du tableau des noms
+String* Sensors::get_names() { 
   return names;
 }
 
-//return the number of values
-int Sensors::get_nb_values(){ 
+// Retourne le nombre de valeurs
+int Sensors::get_nb_values() { 
   return nb_values;
 }
 
-// Return the file header string in the format "<sensor 1 name>;<sensor 2 name>;"
+// Retourne l'en-tête du fichier au format "<nom capteur 1>;<nom capteur 2>;"
 String Sensors::getFileHeader () { 
   String header_string = "";
-  for(int i = 0; i< nb_values; i++){
+  for (int i = 0; i < nb_values; i++) {
     header_string = header_string + names[i] + ";";
   }
   return header_string; 
 }
 
-// Return sensors data string formated to be write to the CSV file. The format is the following: "<sensor 1 value>;<sensor 2 value>;"
+// Retourne les données des capteurs formatées pour être écrites dans un fichier CSV
+// Format : "<valeur capteur 1>;<valeur capteur 2>;"
 String Sensors::getFileData () { 
   String datastring = "";
-  for(int i = 0; i< nb_values; i++){
-    datastring = datastring + String(values[i],2)+ ";";
+  for (int i = 0; i < nb_values; i++) {
+    datastring = datastring + String(values[i], decimals[i]) + ";";
   }
   return datastring;
 }
@@ -89,7 +89,7 @@ void Sensors::measure() {
 
   //connect and start the SHT35 PCB sensor 
   tcaselect(1);
-  delay(3); //wait 2ms for the multiplexer to switch
+  delay(3); //wait 3ms for the multiplexer to switch
   sht.begin(); 
   sht.read();
   values[1]=sht.getTemperature(); //tempSHT
@@ -97,35 +97,48 @@ void Sensors::measure() {
 
   //connect and start the BMP581 PCB sensor 
   tcaselect(2);
-  delay(3);
+  delay(100);
   bmp.beginI2C(BMP581_sensor_ADRESS);
-  delay(5);
+  delay(100);
   bmp5_sensor_data data = {0,0};
   int8_t err = bmp.getSensorData(&data);
   values[3]=data.temperature; //tempBMP
   values[4]=data.pressure/100; //pressBMP (in millibar)
-  //connect and start the BMP581 PCB sensor 
+  //change the I2C frequency for the long cable
+  delay(100);
+  Wire.end();
+  Wire.begin();
+  Wire.setClock(4000);
+  delay(100);
   tcaselect(7);
-  delay(4000);
-  AtlasSerial.begin(9600, SERIAL_8N1, RX_Atlas, TX_Atlas); // RX, TX !
-  delay(100);
-
-  atlasHum.begin();
-  delay(100);
-  float humidity, temperature, dewPoint;
-
-  if (atlasHum.read(humidity, temperature, dewPoint)) {
-    Serial.print("Humidité : "); Serial.print(humidity); Serial.println(" %");
-    Serial.print("Température : "); Serial.print(temperature); Serial.println(" °C");
-    Serial.print("Point de rosée : "); Serial.print(dewPoint); Serial.println(" °C");
-  } else {
-    Serial.println("Erreur de lecture du capteur Atlas");
+  delay(500); //delay for the multiplexer
+  unsigned long start_time_connection = micros();
+  bool timeout = false;
+  while (!ms5837_sensor.init() && !timeout) {
+  Serial.println("pressure sensor not connected");
+  delay(50);
+  timeout = (micros()-start_time_connection)>2000000;
   }
-  delay(3000);
-atlasHum.read(humidity, temperature, dewPoint);
-values[5]=humidity;
-values[6]=temperature;
-values[7]=dewPoint;
+  if (timeout) Serial.println("Init pressure sensor failed!");
+  else Serial.println("Init pressure sensor ok!");
+  ms5837_sensor.setModel(MS5837::MS5837_02BA);
+  ms5837_sensor.read();
+  values[6]=ms5837_sensor.pressure();
+  values[5]=ms5837_sensor.temperature();
+  if(values[5]>4030){values[5]=0;}
+  if(values[6]<-50){values[6]=0;}
+  delay(300);
+  tcaselect(0); //select another i2c channel to avoid interferences
+  delay(100);
+  //change back to the original I2C frequency
+  Wire.end();
+  Wire.begin();
+  Wire.setClock(50000);
+  delay(50);
+  values[7] = (values[6]-values[4])*10/9.81;//water height in cm is (water_pressur-air_pressure)*10/g
+  delay(100);
+  tcaselect(6);
+  delay(100);
 }
 
 // multiplex bus selection for the first multiplexer 

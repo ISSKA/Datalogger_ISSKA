@@ -534,6 +534,7 @@ void send_data_overGSM() {
         return;
     }
 
+    // ⬅️ Lecture à l'envers façon code de base
     int position_in_csv = myFile.size();
     for (int i = 0; i < total_meas_to_send; i++) {
         position_in_csv = max(position_in_csv - 20, 0);
@@ -545,6 +546,7 @@ void send_data_overGSM() {
     }
     myFile.seek(position_in_csv + 1);
 
+    // Lecture des lignes après repositionnement
     String data_matrix[total_meas_to_send][sensor.get_nb_values()];
     int time_array[total_meas_to_send], counter = 0;
 
@@ -553,6 +555,11 @@ void send_data_overGSM() {
             String element = myFile.readStringUntil(';');
             if (element.length() > 0) {
                 if (i == 1) {
+                    // Vérifie que c’est bien une date
+                    if (element.indexOf('/') == -1 || element.indexOf(':') == -1) {
+                        myFile.readStringUntil('\n'); // skip the line
+                        continue;
+                    }
                     DateTime datetime(
                         element.substring(6, 10).toInt(), element.substring(3, 5).toInt(), element.substring(0, 2).toInt(),
                         element.substring(11, 13).toInt(), element.substring(14, 16).toInt(), element.substring(17, 19).toInt());
@@ -580,11 +587,12 @@ void send_data_overGSM() {
     initialize_notecard();
     tp.DotStar_SetPixelColor(25, 25, 0);
 
+    // Construction JSON
     J *body = JCreateObject();
     J *data = JCreateObject();
     JAddItemToObject(body, "data", data);
     String* sensor_names = sensor.get_names();
-    
+
     for (int i = 0; i < sensor.get_nb_values(); i++) {
         J *sensorArray = JAddArrayToObject(data, sensor_names[i].c_str());
         for (int j = 0; j < total_meas_to_send; j++) {
@@ -595,24 +603,32 @@ void send_data_overGSM() {
         }
     }
 
-    char* jsonString = JPrint(body);
-    Serial.println("JSON envoyé :");
-    Serial.println(jsonString);
-
     J *req_data = notecard.newRequest("note.add");
-    JAddStringToObject(req_data, "file", "data_buffer.qo");
+    JAddStringToObject(req_data, "file", "data.qo");
     JAddItemToObject(req_data, "body", body);
     JAddBoolToObject(req_data, "sync", false);
     notecard.sendRequest(req_data);
 
     Serial.println("🔄 Synchronisation avec Notehub...");
     if (synchronize_notecard()) {
-        Serial.println("✅ Synchronisation réussie !");
-        tp.DotStar_SetPixelColor(0, 50, 0);
-        get_external_parameter();
-        failed_sync_count = 0;
+        J *check_file_req = notecard.newRequest("note.get");
+        JAddStringToObject(check_file_req, "file", "data.qo");
+        J *check_file_rsp = notecard.requestAndResponse(check_file_req);
+
+        bool file_still_pending = !(check_file_rsp == NULL || JGetObject(check_file_rsp, "body") == NULL);
+
+        if (!file_still_pending) {
+            Serial.println("✅ Synchronisation réussie et données envoyées !");
+            tp.DotStar_SetPixelColor(0, 50, 0);
+            get_external_parameter();
+            failed_sync_count = 0;
+        } else {
+            Serial.println("⚠️ Connexion OK, mais données non transférées !");
+            tp.DotStar_SetPixelColor(50, 25, 0);
+            failed_sync_count++;
+        }
     } else {
-        Serial.println("❌ Échec de la synchronisation. Stockage des données pour le prochain envoi.");
+        Serial.println("❌ Échec de la synchronisation (pas de connexion).");
         tp.DotStar_SetPixelColor(50, 0, 0);
         failed_sync_count++;
     }
@@ -621,4 +637,6 @@ void send_data_overGSM() {
     sensor.tcaselect(0);
     delay(100);
 }
+
+
 

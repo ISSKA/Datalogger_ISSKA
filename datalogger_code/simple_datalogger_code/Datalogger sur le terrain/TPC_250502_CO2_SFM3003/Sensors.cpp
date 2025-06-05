@@ -1,5 +1,8 @@
 /* *******************************************************************************
-This sensor code is for the two sensors that are installed by default on most PCB.
+Sensor code with one PT100 temperature sensor on the channel 7 of the multiplexer
+**********************************************************************************
+
+This sensor code also includes the two sensors that are installed by default on most PCB.
 We have the SHT35 (I2c adress 0x44 and TCA1) and the BMP581 (I2c adress 0x46 and TCA2)
 
 To add new sensors here are the things you must modify in this file:
@@ -12,7 +15,7 @@ To add new sensors here are the things you must modify in this file:
 
 If you have any questions contact me per email at nicolas.schmid.6035@gmail.com
 **********************************************************************************
-*/  
+*/ 
 
 
 //include libraries for the sensors
@@ -21,28 +24,26 @@ If you have any questions contact me per email at nicolas.schmid.6035@gmail.com
 #include "SHT31.h"
 #include "SparkFun_BMP581_Arduino_Library.h"
 #include <TinyPICO.h>
-#include <sfm3000wedo.h>
-
-
+#include <SensirionI2cSfmSf06.h>
+#include "SparkFun_SCD4x_Arduino_Library.h" 
 //parameters which depend on the PCB version
 #define I2C_MUX_ADDRESS 0x73 //I2C adress of the multiplexer set on the PCB
 #define BMP581_sensor_ADRESS 0x46 //I2C adress of the BMP581 set on the PCB
 #define SHT35_sensor_ADRESS 0x44 //I2C adress of the SHT35 set on the PCB
 
-int offset = 32000; // Offset for the sensor
-float scale = 140.0; // Scale factor for Air and N2 is 140.0, O2 is 142.8
-
 //create an instance of the sensors' classes
 TinyPICO tiny = TinyPICO();
 SHT31 sht;
 BMP581 bmp;
-SFM3000wedo measflow(64);
+SensirionI2cSfmSf06 sfmSf06;
+SCD4x co2_sensor(SCD4x_SENSOR_SCD41); //initialise SCD41 CO2 sensor
+SCD4x co2_2_sensor(SCD4x_SENSOR_SCD41); //initialise SCD41 CO2 sensor
 
 // Déclarer les tableaux pour les noms des capteurs, leurs valeurs et leurs décimales
-String names[] = {"Vbatt", "tempSHT", "humSHT", "tempBMP", "pressBMP", "vSFM", "qSFM"}; // Mise à jour si vous ajoutez des capteurs !
+String names[] = {"Vbatt", "tempSHT", "humSHT", "tempBMP", "pressBMP", "CO2_1", "CO2_2","debitSFM","velSFM","tempSFM"}; // Mise à jour si vous ajoutez des capteurs !
 const int nb_values = sizeof(names) / sizeof(names[0]);
 float values[nb_values];
-int decimals[] = {2, 3, 1, 2, 1, 6, 6}; // Nombre de décimales pour chaque capteur
+int decimals[] = {2, 3, 1, 2, 2, 2, 2, 6, 6, 3}; // Nombre de décimales pour chaque capteur
 
 // Retourne le pointeur du tableau des noms
 String* Sensors::get_names() { 
@@ -84,7 +85,6 @@ String Sensors::serialPrint() { // Affiche les mesures des capteurs pour le déb
   return sensor_display_str;
 }
 
-
 //measure all sensors'values and store them in the values arrays
 void Sensors::measure() {
   delay(5); //delay of 5 ms to ensure that sensors are properly powered
@@ -94,7 +94,7 @@ void Sensors::measure() {
 
   //connect and start the SHT35 PCB sensor 
   tcaselect(1);
-  delay(30); //wait 3ms for the multiplexer to switch
+  delay(3); //wait 3ms for the multiplexer to switch
   sht.begin(); 
   sht.read();
   values[1]=sht.getTemperature(); //tempSHT
@@ -102,39 +102,71 @@ void Sensors::measure() {
 
   //connect and start the BMP581 PCB sensor 
   tcaselect(2);
-  delay(30);
+  delay(3);
   bmp.beginI2C(BMP581_sensor_ADRESS);
-  delay(100);
+  delay(5);
   bmp5_sensor_data data = {0,0};
   int8_t err = bmp.getSensorData(&data);
   values[3]=data.temperature; //tempBMP
   values[4]=data.pressure/100; //pressBMP (in millibar)
-
-  Wire.begin();
-  Wire.setClock(5000);
-  delay(30);
+  delay(100);
+  //connect and read CO2 sensor 1
   tcaselect(7);
+  delay(5);
+  co2_sensor.begin();
+  for(int i = 0; i<4;i++){
+    co2_sensor.measureSingleShot();
+    delay(1500); //delay needed specified in the datasheet for single shot measurements
+    co2_sensor.readMeasurement();
+    values[5]=co2_sensor.getCO2();
+    Serial.print("CO2:");
+    Serial.println(values[5]); //only last value printed is stored
+  }
   delay(100);
-
-  measflow.init();
+    //connect and read CO2 sensor 2
+  tcaselect(6);
+  delay(5);
+  co2_2_sensor.begin();
+  for(int i = 0; i<4;i++){
+    co2_2_sensor.measureSingleShot();
+    delay(1500); //delay needed specified in the datasheet for single shot measurements
+    co2_2_sensor.readMeasurement();
+    values[6]=co2_2_sensor.getCO2();
+    Serial.print("CO2_2:");
+    Serial.println(values[6]); //only last value printed is stored
+  }
   delay(100);
-  unsigned int result = measflow.getvalue();
-  float FlowSFM = ((float)result - offset) / scale;
-  values[6] = FlowSFM;
-  Serial.println(FlowSFM);
-  //Calcul de la vitesse en m/s en divisant par la surface du tube de mesure dont le diamètre est de 19.8 mm
-  if (values[6]>=0){
-    values[5]=(0.0034*pow(values[6],3)-0.0559*pow(values[6],2)+0.4035*values[6]);
+  //connect and read SFM3003
+  //SFM 3003
+  tcaselect(5);
+  delay(100);
+  sfmSf06.begin(Wire, SFM3003_I2C_ADDR_2D);
+  delay(100);
+  //sfmSf06.stopContinuousMeasurement();
+  //delay(100);
+  sfmSf06.startO2ContinuousMeasurement();
+  delay(200);
+  int16_t temperatureRaw = 0;
+  uint16_t status = 0;
+  float SFMmoyenne = 0;
+  int16_t flowRaw=0;
+  
+  delay(100);
+  sfmSf06.readMeasurementDataRaw(flowRaw, temperatureRaw, status);
+  delay(200);
+  values[7]=(float(flowRaw)+12288)/120;
+  //SFMmoyenne +=flowcorr;
+  if (values[7]>=0){
+    values[8]=(0.0034*pow(values[7],3)-0.0559*pow(values[7],2)+0.4035*values[7]);
   }
   else{
-    values[5]=-1*(0.0034*pow(abs(values[6]),3)-0.0559*pow(values[6],2)+0.4035*abs(values[6]));
+    values[8]=-1*(0.0034*pow(abs(values[7]),3)-0.0559*pow(values[7],2)+0.4035*abs(values[7]));
   }
-  Wire.end();
-  Wire.begin();
-  Wire.setClock(50000);
-  delay(300);
+  values[9] = float(temperatureRaw)/200;
+  
+  delay(50);
   tcaselect(2);
-  delay(300);
+  delay(50);
   //put here the measurement of other sensors!!!
 }
 

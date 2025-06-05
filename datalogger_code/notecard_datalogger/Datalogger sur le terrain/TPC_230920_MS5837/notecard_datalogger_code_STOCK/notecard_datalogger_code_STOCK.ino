@@ -534,20 +534,16 @@ void send_data_overGSM() {
         return;
     }
 
-    int position_in_csv = myFile.size() - 1;
-    int lines_found = 0;
-
-    while (position_in_csv > 0 && lines_found < total_meas_to_send) {
-       myFile.seek(position_in_csv);
-       char c = myFile.read();
-       if (c == '\n') {
-          lines_found++;
-         }
-         position_in_csv--;
-     }
-
-// Positionne juste après le dernier saut de ligne trouvé
-myFile.seek(position_in_csv + 2);
+    int position_in_csv = myFile.size();
+    for (int i = 0; i < total_meas_to_send; i++) {
+        position_in_csv = max(position_in_csv - 20, 0);
+        myFile.seek(position_in_csv);
+        while (position_in_csv > 0 && myFile.peek() != '\n') {
+            position_in_csv--;
+            myFile.seek(position_in_csv);
+        }
+    }
+    myFile.seek(position_in_csv + 1);
 
     String data_matrix[total_meas_to_send][sensor.get_nb_values()];
     int time_array[total_meas_to_send], counter = 0;
