@@ -127,7 +127,7 @@ int DS2::getMeasurements(void) {
   command = address + "R0!";
 
   // Send command
-  sendCommand(380);   // 380 ms is recommended wait time
+  sendCommand(980);   // 380 ms is recommended wait time
 
   // Parse string
   parseDataString();
